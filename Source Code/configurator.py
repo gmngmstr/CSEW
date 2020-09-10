@@ -4,6 +4,8 @@ import json
 import shutil
 import traceback
 import admin_test
+import win32com.client
+from wmi import WMI
 from tkinter import *
 from tkinter import ttk as ttk
 from tkinter import filedialog
@@ -23,7 +25,7 @@ class VerticalScrolledFrame(Frame):
         # create a canvas object and a vertical scrollbar for scrolling it
         vscrollbar = ttk.Scrollbar(self, orient=VERTICAL)
         vscrollbar.pack(fill=Y, side=RIGHT, expand=FALSE)
-        canvas = Canvas(self, bd=0, highlightthickness=0, yscrollcommand=vscrollbar.set)
+        self.canvas = canvas = Canvas(self, bd=0, highlightthickness=0, yscrollcommand=vscrollbar.set)
         canvas.pack(side=LEFT, fill=BOTH, expand=TRUE)
         vscrollbar.config(command=canvas.yview)
         # reset the view
@@ -66,43 +68,49 @@ class Config(Tk):
                                                                                 "Enabled": IntVar(),
                                                                                 "Categories": {'Points': [IntVar()]}},
                                                               "Keep User": {"Definition": 'Enable this to penalize the competitor for removing a user.',
-                                                                            "Modify Definition": 'This will penalize the competitor for removing a user. To add more users press the "Add" button. To remove a user press the "X" button next to the user you want to remove. Keep it one user per line. Do not make the point value negative.',
+                                                                            "Modify Definition": 'This will penalize the competitor for removing a user. To add more users press the "Add" button. To remove a user press the "X" button next to the user you want to remove. Keep it one user per line. To add users that are not on the computer, then you can type the user name in the field. Otherwise use the drop down to select a user. Do not make the point value negative.',
                                                                             "Enabled": IntVar(),
                                                                             "Categories": {'Points': [IntVar()], 'User Name': [StringVar()]}},
                                                               "Add Admin": {"Definition": 'Enable this to score the competitor for elevating a user to an Administrator.',
-                                                                            "Modify Definition": 'This will score the competitor for elevating a user to an Administrator. To add more users press the "Add" button. To remove a user press the "X" button next to the user you want to remove. Keep it one user per line.',
+                                                                            "Modify Definition": 'This will score the competitor for elevating a user to an Administrator. To add more users press the "Add" button. To remove a user press the "X" button next to the user you want to remove. Keep it one user per line. To add users that are not on the computer, then you can type the user name in the field. Otherwise use the drop down to select a user.',
                                                                             "Enabled": IntVar(),
                                                                             "Categories": {'Points': [IntVar()], 'User Name': [StringVar()]}},
                                                               "Remove Admin": {"Definition": 'Enable this to score the competitor for demoting a user to Standard user.',
-                                                                               "Modify Definition": 'This will score the competitor for demoting a user to Standard user. To add more users press the "Add" button. To remove a user press the "X" button next to the user you want to remove. Keep it one user per line.',
+                                                                               "Modify Definition": 'This will score the competitor for demoting a user to Standard user. To add more users press the "Add" button. To remove a user press the "X" button next to the user you want to remove. Keep it one user per line. To add users that are not on the computer, then you can type the user name in the field. Otherwise use the drop down to select a user.',
                                                                                "Enabled": IntVar(),
                                                                                "Categories": {'Points': [IntVar()], 'User Name': [StringVar()]}},
                                                               "Add User": {"Definition": 'Enable this to score the competitor for adding a user.',
-                                                                           "Modify Definition": 'This will score the competitor for adding a user. To add more users press the "Add" button. To remove a user press the "X" button next to the user you want to remove. Keep it one user per line.',
+                                                                           "Modify Definition": 'This will score the competitor for adding a user. To add more users press the "Add" button. To remove a user press the "X" button next to the user you want to remove. Keep it one user per line. To add users that are not on the computer, then you can type the user name in the field. Otherwise use the drop down to select a user.',
                                                                            "Enabled": IntVar(),
                                                                            "Categories": {'Points': [IntVar()], 'User Name': [StringVar()]}},
                                                               "Remove User": {"Definition": 'Enable this to score the competitor for removing a user.',
-                                                                              "Modify Definition": 'This will score the competitor for removing a user. To add more users press the "Add" button. To remove a user press the "X" button next to the user you want to remove. Keep it one user per line.',
+                                                                              "Modify Definition": 'This will score the competitor for removing a user. To add more users press the "Add" button. To remove a user press the "X" button next to the user you want to remove. Keep it one user per line. To add users that are not on the computer, then you can type the user name in the field. Otherwise use the drop down to select a user.',
                                                                               "Enabled": IntVar(),
                                                                               "Categories": {'Points': [IntVar()], 'User Name': [StringVar()]}},
                                                               "User Change Password": {"Definition": 'Enable this to score the competitor for changing a users password.',
-                                                                                       "Modify Definition": 'This will score the competitor for changing a users password. To add more users press the "Add" button. To remove a user press the "X" button next to the user you want to remove. Keep it one user per line.',
+                                                                                       "Modify Definition": 'This will score the competitor for changing a users password. To add more users press the "Add" button. To remove a user press the "X" button next to the user you want to remove. Keep it one user per line. To add users that are not on the computer, then you can type the user name in the field. Otherwise use the drop down to select a user.',
                                                                                        "Enabled": IntVar(),
                                                                                        "Categories": {'Points': [IntVar()], 'User Name': [StringVar()]}},
                                                               "Add User to Group": {"Definition": 'Enable this to score the competitor for adding a user to a group other than the Administrative group.',
-                                                                                    "Modify Definition": 'This will score the competitor for adding a user to a group other than the Administrative group. To add more users press the "Add" button. To remove a user press the "X" button next to the user you want to remove. Keep it one user  and group per line.',
+                                                                                    "Modify Definition": 'This will score the competitor for adding a user to a group other than the Administrative group. To add more users press the "Add" button. To remove a user press the "X" button next to the user you want to remove. Keep it one user  and group per line. To add users or group that are not on the computer, then you can type the user or group name in the field. Otherwise use the drop down to select a user or group.',
                                                                                     "Enabled": IntVar(),
                                                                                     "Categories": {'Points': [IntVar()], 'User Name': [StringVar()], 'Group Name': [StringVar()]}},
                                                               "Remove User from Group": {"Definition": 'Enable this to score the competitor for removing a user from a group other than the Administrative group.',
-                                                                                         "Modify Definition": 'This will score the competitor for removing a user from a group other than the Administrative group. To add more users press the "Add" button. To remove a user press the "X" button next to the user you want to remove. Keep it one user and group per line.',
+                                                                                         "Modify Definition": 'This will score the competitor for removing a user from a group other than the Administrative group. To add more users press the "Add" button. To remove a user press the "X" button next to the user you want to remove. Keep it one user and group per line. To add users or group that are not on the computer, then you can type the user or group name in the field. Otherwise use the drop down to select a user or group.',
                                                                                          "Enabled": IntVar(),
                                                                                          "Categories": {'Points': [IntVar()], 'User Name': [StringVar()], 'Group Name': [StringVar()]}}},
                                        "Local Policy Options": {"Do Not Require CTRL_ALT_DEL": {"Definition": 'Enable this to score the competitor for disabling Do Not Require CTRL_ALT_DEL.',
                                                                                                 "Enabled": IntVar(),
                                                                                                 "Categories": {'Points': [IntVar()]}},
-                                                                "Turn On Firewall": {"Definition": 'Enable this to score the competitor for turning on the firewall.',
-                                                                                     "Enabled": IntVar(),
-                                                                                     "Categories": {'Points': [IntVar()]}},
+                                                                "Turn On Domain Firewall": {"Definition": 'Enable this to score the competitor for turning on the domain firewall profile.',
+                                                                                            "Enabled": IntVar(),
+                                                                                            "Categories": {'Points': [IntVar()]}},
+                                                                "Turn On Private Firewall": {"Definition": 'Enable this to score the competitor for turning on the private firewall profile.',
+                                                                                             "Enabled": IntVar(),
+                                                                                             "Categories": {'Points': [IntVar()]}},
+                                                                "Turn On Public Firewall": {"Definition": 'Enable this to score the competitor for turning on the public firewall profile.',
+                                                                                            "Enabled": IntVar(),
+                                                                                            "Categories": {'Points': [IntVar()]}},
                                                                 "Don't Display Last User": {"Definition": 'Enable this to score the competitor for enabling Don\'t Display Last User.',
                                                                                             "Enabled": IntVar(),
                                                                                             "Categories": {'Points': [IntVar()]}}},
@@ -181,9 +189,9 @@ class Config(Tk):
                                                                                  "Enabled": IntVar(),
                                                                                  "Categories": {'Points': [IntVar()], 'Feature Name': [StringVar()]}},
                                                               "Services": {"Definition": 'Enable this to score the competitor for modifying a services run ability.',
-                                                                           "Modify Definition": 'This will score the competitor for modifying a services run ability. To add more services press the "Add" button. To remove a service press the "X" button next to the service you want to remove. Keep it one service per line.',
+                                                                           "Modify Definition": 'This will score the competitor for modifying a services run ability. To add more services press the "Add" button. To remove a service press the "X" button next to the service you want to remove. Keep it one service per line. The name can be the services system name or the displayed name.',
                                                                            "Enabled": IntVar(),
-                                                                           "Categories": {'Points': [IntVar()], 'Service Name': [StringVar()], 'Service Status': [StringVar()], 'Service Start Type': [StringVar()]}}},
+                                                                           "Categories": {'Points': [IntVar()], 'Service Name': [StringVar()], 'Service State': [StringVar()], 'Service Start Mode': [StringVar()]}}},
                                        "File Management": {"Bad File": {"Definition": 'Enable this to score the competitor for deleting a file.',
                                                                         "Modify Definition": 'This will score the competitor for deleting a file. To add more files press the "Add" button. To remove a file press the "X" button next to the file you want to remove. Keep it one file per line.',
                                                                         "Enabled": IntVar(),
@@ -252,77 +260,90 @@ class Config(Tk):
         ttk.Label(MainPage, textvariable=vulnerability_settings["Main Menu"]["Tally Points"], font='Verdana 10 bold', wraplength=150).grid(row=5)
 
         ForensicsPage = VerticalScrolledFrame(nb)
-        ForensicsPageIn = ForensicsPage.interior
+        ForensicsPageList = ForensicsPage.interior
+        ForensicsPageList.pack(fill=X)
+        ForensicsPageIn = ttk.Frame(ForensicsPage)
+        ForensicsPageIn.pack(before=ForensicsPage.canvas, fill=X)
         ForensicsPageIn.grid_columnconfigure(1, weight=1)
         ForensicsPageIn.grid_columnconfigure(2, weight=1)
-        ttk.Button(ForensicsPageIn, text="Add", command=lambda: add_row(ForensicsPageIn, vulnerability_settings["Forensic"]["Categories"], widgetDict["Forensic"], 3)).grid(row=0, column=0, sticky=EW)
+        ttk.Button(ForensicsPageIn, text="Add", command=lambda: add_row(ForensicsPageList, vulnerability_settings["Forensic"])).grid(row=0, column=0, sticky=EW)
         ttk.Label(ForensicsPageIn, text='This section is for scoring forensic questions. To score a forensic question be sure to check "Enable". To add more questions press the "Add" button. To remove questions press the "X" button next to the question you want to remove. \nDo note that the answers are case sensitive.').grid(row=0, column=1, rowspan=2, columnspan=3)
         ttk.Checkbutton(ForensicsPageIn, text="Enable", variable=vulnerability_settings["Forensic"]["Enabled"]).grid(row=1, column=0)
-        ttk.Label(ForensicsPageIn, text="Points", font='Verdana 10 bold').grid(row=2, column=0)
+        ttk.Label(ForensicsPageIn, text="Points", font='Verdana 10 bold', width=10).grid(row=2, column=0)
         ttk.Label(ForensicsPageIn, text="Question", font='Verdana 10 bold').grid(row=2, column=1)
         ttk.Label(ForensicsPageIn, text="Answer", font='Verdana 10 bold').grid(row=2, column=2)
-        ttk.Entry(ForensicsPageIn, width=5, textvariable=vulnerability_settings["Forensic"]["Categories"]["Points"][0]).grid(row=3, column=0)
-        ttk.Entry(ForensicsPageIn, textvariable=vulnerability_settings["Forensic"]["Categories"]["Question"][0]).grid(row=3, column=1, sticky=EW)
-        ttk.Entry(ForensicsPageIn, textvariable=vulnerability_settings["Forensic"]["Categories"]["Answer"][0]).grid(row=3, column=2, sticky=EW)
-        ttk.Button(ForensicsPageIn, text='X', command=lambda: remove_row(0, vulnerability_settings["Forensic"]["Categories"], widgetDict["Forensic"])).grid(row=3, column=3)
-        widgetDict["Forensic"].update({0: ForensicsPageIn.grid_slaves(row=3)})
+        ttk.Label(ForensicsPageIn, text="Remove", font='Verdana 10 bold').grid(row=2, column=3)
+        ForensicsPageListRow = ttk.Frame(ForensicsPageList)
+        ForensicsPageListRow.pack(fill=X)
+        ForensicsPageListRow.grid_columnconfigure(1, weight=1)
+        ForensicsPageListRow.grid_columnconfigure(2, weight=1)
+        ttk.Entry(ForensicsPageListRow, width=10, textvariable=vulnerability_settings["Forensic"]["Categories"]["Points"][0]).grid(row=0, column=0)
+        ttk.Entry(ForensicsPageListRow, textvariable=vulnerability_settings["Forensic"]["Categories"]["Question"][0]).grid(row=0, column=1, sticky=EW)
+        ttk.Entry(ForensicsPageListRow, textvariable=vulnerability_settings["Forensic"]["Categories"]["Answer"][0]).grid(row=0, column=2, sticky=EW)
+        fCat_var_list = [vulnerability_settings["Forensic"]["Categories"]["Points"][0], vulnerability_settings["Forensic"]["Categories"]["Question"][0], vulnerability_settings["Forensic"]["Categories"]["Answer"][0]]
+        ttk.Button(ForensicsPageListRow, text='X', width=8, command=lambda: remove_row(vulnerability_settings["Forensic"], fCat_var_list, ForensicsPageListRow)).grid(row=0, column=3)
 
         UserPolicyPage = VerticalScrolledFrame(nb)
         UserPolicyPageIn = UserPolicyPage.interior
         UserPolicyPageIn.grid_columnconfigure(1, weight=1)
         ttk.Label(UserPolicyPageIn, text='This section is for scoring user policies. The options that will take multiple test points can be setup by clicking the "Modify" button. Once the "Modify" button is clicked that option will automatically be enabled. Make sure the option is enabled and the points are set for the options you want scored.', padding='10 5').grid(row=0, column=0, columnspan=3)
+        ttk.Separator(UserPolicyPageIn, orient=HORIZONTAL).grid(row=1, column=0, columnspan=3, sticky=EW)
         ttk.Label(UserPolicyPageIn, text='Account Management', font='Verdana 10').grid(row=1, column=0, stick=W)
-        ttk.Label(UserPolicyPageIn, text="Points", font='Verdana 10 bold').grid(row=1, column=2, stick=W)
+        ttk.Label(UserPolicyPageIn, text="Points", font='Verdana 10 bold').grid(row=1, column=2)
         for i, t in enumerate(vulnerability_settings["Account Management"].keys()):
-            self.add_option(UserPolicyPageIn, vulnerability_settings["Account Management"][t], t, i + 2, nb)
+            self.add_option(UserPolicyPageIn, vulnerability_settings["Account Management"][t], t, i * 2 + 2, nb)
 
         LocalPolicyPage = VerticalScrolledFrame(nb)
         LocalPolicyPageIn = LocalPolicyPage.interior
         LocalPolicyPageIn.grid_columnconfigure(1, weight=1)
         ttk.Label(LocalPolicyPageIn, text='This section is for scoring Local Security Policies. Each option has a defined range that they be testing listed in their description. Make sure the option is enabled and the points are set for the options you want scored.', padding='10 5').grid(row=0, column=0, columnspan=3)
+        ttk.Separator(LocalPolicyPageIn, orient=HORIZONTAL).grid(row=1, column=0, columnspan=3, sticky=EW)
         ttk.Label(LocalPolicyPageIn, text='Local Security Policy Password', font='Verdana 10').grid(row=1, column=0, stick=W)
-        ttk.Label(LocalPolicyPageIn, text="Points", font='Verdana 10 bold').grid(row=1, column=2, stick=W)
+        ttk.Label(LocalPolicyPageIn, text="Points", font='Verdana 10 bold').grid(row=1, column=2)
         for i, t in enumerate(vulnerability_settings["Local Policy Password"].keys()):
-            self.add_option(LocalPolicyPageIn, vulnerability_settings["Local Policy Password"][t], t, i + 2, nb)
-            l = i + 3
-        ttk.Label(LocalPolicyPageIn, text='Local Security Policy Audit', font='Verdana 10').grid(row=l, column=0, stick=W)
-        ttk.Label(LocalPolicyPageIn, text="Points", font='Verdana 10 bold').grid(row=l, column=2, stick=W)
+            self.add_option(LocalPolicyPageIn, vulnerability_settings["Local Policy Password"][t], t, i * 2 + 2, nb)
+            l1 = i + 3
+        ttk.Label(LocalPolicyPageIn, text='Local Security Policy Audit', font='Verdana 10').grid(row=l1, column=0, stick=W)
+        ttk.Label(LocalPolicyPageIn, text="Points", font='Verdana 10 bold').grid(row=l1, column=2)
         for i, t in enumerate(vulnerability_settings["Local Policy Audit"].keys()):
-            self.add_option(LocalPolicyPageIn, vulnerability_settings["Local Policy Audit"][t], t, i + l + 1, nb)
-            l = i + l + 2
-        ttk.Label(LocalPolicyPageIn, text='Local Security Policy Options', font='Verdana 10').grid(row=l, column=0, stick=W)
-        ttk.Label(LocalPolicyPageIn, text="Points", font='Verdana 10 bold').grid(row=l, column=2, stick=W)
+            self.add_option(LocalPolicyPageIn, vulnerability_settings["Local Policy Audit"][t], t, i * 2 + l1 + 1, nb)
+            l2 = i + l1 + 2
+        ttk.Label(LocalPolicyPageIn, text='Local Security Policy Options', font='Verdana 10').grid(row=l2, column=0, stick=W)
+        ttk.Label(LocalPolicyPageIn, text="Points", font='Verdana 10 bold').grid(row=l2, column=2)
         for i, t in enumerate(vulnerability_settings["Local Policy Options"].keys()):
-            self.add_option(LocalPolicyPageIn, vulnerability_settings["Local Policy Options"][t], t, i + l + 1, nb)
+            self.add_option(LocalPolicyPageIn, vulnerability_settings["Local Policy Options"][t], t, i * 2 + l2 + 1, nb)
 
         ProgramFilePage = VerticalScrolledFrame(nb)
         ProgramFilePageIn = ProgramFilePage.interior
         ProgramFilePageIn.grid_columnconfigure(1, weight=1)
         ttk.Label(ProgramFilePageIn, text='This section is for scoring program and file manipulation. The options that will take multiple test points can be setup by clicking the "Modify" button. Once the "Modify" button is clicked that option will automatically be enabled. Make sure the option is enabled and the points are set for the options you want scored.', padding='10 5').grid(row=0, column=0, columnspan=3)
+        ttk.Separator(ProgramFilePageIn, orient=HORIZONTAL).grid(row=1, column=0, columnspan=3, sticky=EW)
         ttk.Label(ProgramFilePageIn, text='Programs', font='Verdana 10').grid(row=1, column=0, stick=W)
-        ttk.Label(ProgramFilePageIn, text="Modify", font='Verdana 10 bold').grid(row=1, column=2, stick=W)
+        ttk.Label(ProgramFilePageIn, text="Modify", font='Verdana 10 bold').grid(row=1, column=2)
         for i, t in enumerate(vulnerability_settings["Program Management"].keys()):
-            self.add_option(ProgramFilePageIn, vulnerability_settings["Program Management"][t], t, i + 2, nb)
-            l = i + 3
+            self.add_option(ProgramFilePageIn, vulnerability_settings["Program Management"][t], t, i * 2 + 2, nb)
+            l = i * 2 + 1
         ttk.Label(ProgramFilePageIn, text='Files', font='Verdana 10').grid(row=l, column=0, stick=W)
-        ttk.Label(ProgramFilePageIn, text="Modify", font='Verdana 10 bold').grid(row=l, column=2, stick=W)
+        ttk.Label(ProgramFilePageIn, text="Modify", font='Verdana 10 bold').grid(row=l, column=2)
         for i, t in enumerate(vulnerability_settings["File Management"].keys()):
-            self.add_option(ProgramFilePageIn, vulnerability_settings["File Management"][t], t, i + l + 1, nb)
+            self.add_option(ProgramFilePageIn, vulnerability_settings["File Management"][t], t, i * 2 + l + 1, nb)
 
         MiscellaneousPage = VerticalScrolledFrame(nb)
         MiscellaneousPageIn = MiscellaneousPage.interior
         MiscellaneousPageIn.grid_columnconfigure(1, weight=1)
         ttk.Label(MiscellaneousPageIn, text='This section is for scoring the options that do not fit into and of the other or multiple catagories. The options that will take multiple test points can be setup by clicking the "Modify" button. Once the "Modify" button is clicked that option will automatically be enabled. Make sure the option is enabled and the points are set for the options you want scored.', padding='10 5').grid(row=0, column=0, columnspan=3)
+        ttk.Separator(MiscellaneousPageIn, orient=HORIZONTAL).grid(row=1, column=0, columnspan=3, sticky=EW)
         ttk.Label(MiscellaneousPageIn, text='Miscellaneous', font='Verdana 10').grid(row=1, column=0, stick=W)
-        ttk.Label(MiscellaneousPageIn, text="Points", font='Verdana 10 bold').grid(row=1, column=2, stick=W)
+        ttk.Label(MiscellaneousPageIn, text="Points", font='Verdana 10 bold').grid(row=1, column=2)
         for i, t in enumerate(vulnerability_settings["Miscellaneous"].keys()):
-            self.add_option(MiscellaneousPageIn, vulnerability_settings["Miscellaneous"][t], t, i + 2, nb)
+            self.add_option(MiscellaneousPageIn, vulnerability_settings["Miscellaneous"][t], t, i * 2 + 2, nb)
 
         ReportPage = VerticalScrolledFrame(nb)
         ReportPageIn = ReportPage.interior
+        reportWidgets = []
         ttk.Button(ReportPageIn, text='Export to csv').grid(row=0, column=0, stick=EW)
         ttk.Button(ReportPageIn, text='Export to HTML').grid(row=1, column=0, stick=EW)
-        ttk.Button(ReportPageIn, text='Generate', command=lambda: (self.generate_report(ReportPageIn))).grid(row=2, column=0, stick=EW)
+        ttk.Button(ReportPageIn, text='Generate', command=lambda: (self.generate_report(ReportPageIn, reportWidgets))).grid(row=2, column=0, stick=EW)
         ttk.Label(ReportPageIn, text='This section is for reviewing the options that will be scored. To view the report press the "Generate" button. To export this report to a .csv file press the "Export to CSV" button(WIP). To export this report to a web page press the "Export to HTML" button(WIP).').grid(row=0, column=1, rowspan=3, columnspan=4)
 
         nb.add(MainPage, text='Main Page')
@@ -343,51 +364,37 @@ class Config(Tk):
             ttk.Button(frame, text='Modify', command=lambda: self.modify_settings(name, entry, return_frame)).grid(row=row, column=2)
         else:
             ttk.Entry(frame, width=5, textvariable=entry["Categories"]["Points"][0]).grid(row=row, column=2)
+        ttk.Separator(frame, orient=HORIZONTAL).grid(row=row + 1, column=0, columnspan=3, sticky=EW)
 
     def modify_settings(self, option, entry, packing):
         self.pack_slaves()[0].pack_forget()
         modifyPage = VerticalScrolledFrame(self)
         modifyPage.pack(expand=1, fill="both")
-        modifyPageIn = modifyPage.interior
+        modifyPageList = modifyPage.interior
+        modifyPageList.pack(fill=X)
+        modifyPageIn = ttk.Frame(modifyPage)
+        modifyPageIn.pack(before=modifyPage.canvas, fill=X)
         if entry["Enabled"].get() != 1:
             entry["Enabled"].set(1)
-        if len(widgetDict["Modify"]) > 0:
-            for i in widgetDict["Modify"]:
-                for t in widgetDict["Modify"][i]:
-                    t.destroy()
-            widgetDict["Modify"].clear()
         ttk.Button(modifyPageIn, text="Save", command=lambda: (self.pack_slaves()[0].pack_forget(), packing.pack(expand=1, fill="both"))).grid(row=0, column=0, sticky=EW)
         ttk.Label(modifyPageIn, text=option + ' Modification', font='Verdana 15').grid(row=0, column=1, columnspan=len(entry["Categories"]))
-        ttk.Button(modifyPageIn, text="Add", command=lambda: (add_row(modifyPageIn, entry["Categories"], widgetDict["Modify"], 3))).grid(row=1, column=0, sticky=EW)
+        ttk.Button(modifyPageIn, text="Add", command=lambda: (add_row(modifyPageList, entry))).grid(row=1, column=0, sticky=EW)
         ttk.Label(modifyPageIn, text=entry["Modify Definition"], wraplength=int(self.winfo_screenwidth() * 2 / 3 - 100)).grid(row=1, column=1, columnspan=len(entry["Categories"]))
         for i, t in enumerate(entry["Categories"]):
-            ttk.Label(modifyPageIn, text=t, font='Verdana 10 bold').grid(row=2, column=i)
+            if t == "Points":
+                ttk.Label(modifyPageIn, text=t, font='Verdana 10 bold', width=10).grid(row=2, column=i)
+            else:
+                modifyPageIn.grid_columnconfigure(i, weight=1)
+                ttk.Label(modifyPageIn, text=t, font='Verdana 10 bold').grid(row=2, column=i)
+            r = i + 1
+        ttk.Label(modifyPageIn, text="Remove", font='Verdana 10 bold').grid(row=2, column=r)
         for i in range(len(entry["Categories"]["Points"])):
-            if entry["Categories"]["Points"][i] != 0:
-                for r, t in enumerate(entry["Categories"]):
-                    if t == "Points":
-                        ttk.Entry(modifyPageIn, width=5, textvariable=entry["Categories"]["Points"][i]).grid(row=i + 3, column=r)
-                    elif t == "File Path":
-                        modifyPageIn.grid_columnconfigure(r, weight=1)
-                        ttk.Entry(modifyPageIn, textvariable=entry["Categories"][t][i]).grid(row=i + 3, column=r, sticky=EW)
-                        ttk.Button(modifyPageIn, text='...', command=lambda: entry["Categories"][t][i].set(filedialog.askdirectory())).grid(row=i + 3, column=r + 1)
-                        c = r + 2
-                    elif t == "Service Status":
-                        ttk.OptionMenu(modifyPageIn, entry["Categories"][t][i], *["Running", "Stopped"]).grid(row=i + 3, column=r, sticky=EW)
-                        c = r + 1
-                    elif t == "Service Start Type":
-                        ttk.OptionMenu(modifyPageIn, entry["Categories"][t][i], *["Automatic", "Manual", "Disabled"]).grid(row=i + 3, column=r, sticky=EW)
-                        c = r + 1
-                    else:
-                        ttk.Entry(modifyPageIn, textvariable=entry["Categories"][t][i]).grid(row=i + 3, column=r, sticky=EW)
-                        c = r + 1
-                ttk.Button(modifyPageIn, text='X', command=lambda: remove_row(i, entry["Categories"], widgetDict["Modify"])).grid(row=i + 3, column=c, sticky=W)
-                widgetDict["Modify"].update({i: modifyPageIn.grid_slaves(row=i + 3)})
+            load_modify_settings(modifyPageList, entry, i)
 
-    def generate_report(self, frame):
-        for i in widgetDict["Report"]:
+    def generate_report(self, frame, report_widgets):
+        for i in report_widgets:
             i.destroy()
-        widgetDict["Report"] = []
+        report_widgets = []
         wrap = int(self.winfo_screenwidth() * 2 / 3 / 5) - 86
         final_row = 4
         for s in vulnerability_settings.keys():
@@ -440,7 +447,7 @@ class Config(Tk):
                     final_row -= 1
         for i in range(4, final_row):
             for w in frame.grid_slaves(row=i):
-                widgetDict["Report"].append(w)
+                report_widgets.append(w)
         tally()
 
 
@@ -448,67 +455,109 @@ def change_theme():
     root.ttkStyle.set_theme(vulnerability_settings["Main Menu"]["Style"].get())
 
 
-def add_row(frame, entry, widgets, default_row):
-    test = True
-    rwl = 0
-    while test:
-        if rwl not in widgets.keys():
-            test = False
-        else:
-            rwl += 1
-    if len(widgets) > 0:
-        i = 0
-        for w in widgets:
-            if widgets[w][0].grid_info()['row'] > i:
-                tempr = widgets[w][0].grid_info()['row'] + 1
-    else:
-        tempr = default_row
-    if rwl == len(widgets) and rwl != 0:
-        for i in entry:
-            if i == "Points":
-                entry[i].append(IntVar())
+def load_modify_settings(frame, entry, i):
+    cat_var_list = []
+    modifyPageListRow = ttk.Frame(frame)
+    modifyPageListRow.pack(fill=X)
+    if entry["Categories"]["Points"][i] != 0:
+        for r, t in enumerate(entry["Categories"]):
+            if t == "Points":
+                ttk.Entry(modifyPageListRow, width=10, textvariable=entry["Categories"]["Points"][i]).grid(row=0, column=r)
+            elif t == "File Path":
+                modifyPageListRow.grid_columnconfigure(r, weight=1)
+                ttk.Entry(modifyPageListRow, textvariable=entry["Categories"][t][i]).grid(row=0, column=r, sticky=EW)
+                ttk.Button(modifyPageListRow, text='...', command=lambda: entry["Categories"][t][i].set(filedialog.askdirectory())).grid(row=0, column=r + 1)
+                c = r + 2
+            elif t == "Service Name":
+                modifyPageListRow.grid_columnconfigure(r, weight=1)
+                service_list = get_service_list()
+                ttk.Combobox(modifyPageListRow, textvariable=entry["Categories"][t][i], values=service_list).grid(row=0, column=r, sticky=EW)
+                c = r + 1
+            elif t == "Service State":
+                modifyPageListRow.grid_columnconfigure(r, weight=1)
+                ttk.OptionMenu(modifyPageListRow, entry["Categories"][t][i], *["Running", "Running", "Stopped"]).grid(row=0, column=r, sticky=EW)
+                c = r + 1
+            elif t == "Service Start Mode":
+                modifyPageListRow.grid_columnconfigure(r, weight=1)
+                ttk.OptionMenu(modifyPageListRow, entry["Categories"][t][i], *["Auto", "Auto", "Manual", "Disabled"]).grid(row=0, column=r, sticky=EW)
+                c = r + 1
+            elif t == "User Name":
+                modifyPageListRow.grid_columnconfigure(r, weight=1)
+                user_list = get_user_list()
+                ttk.Combobox(modifyPageListRow, textvariable=entry["Categories"][t][i], values=user_list).grid(row=0, column=r, sticky=EW)
+                c = r + 1
+            elif t == "Group Name":
+                modifyPageListRow.grid_columnconfigure(r, weight=1)
+                group_list = get_group_list()
+                ttk.Combobox(modifyPageListRow, textvariable=entry["Categories"][t][i], values=group_list).grid(row=0, column=r, sticky=EW)
+                c = r + 1
             else:
-                entry[i].append(StringVar())
-    else:
-        for i in entry:
-            if i == "Points":
-                entry[i][rwl] = IntVar()
-            else:
-                entry[i][rwl] = StringVar()
+                print(t)
+                modifyPageListRow.grid_columnconfigure(r, weight=1)
+                ttk.Entry(modifyPageListRow, textvariable=entry["Categories"][t][i]).grid(row=0, column=r, sticky=EW)
+                c = r + 1
+            cat_var_list.append(entry["Categories"][t][i])
+        ttk.Button(modifyPageListRow, text='X', width=8, command=lambda: remove_row(entry, cat_var_list, modifyPageListRow)).grid(row=0, column=c, sticky=W)
 
-    for i, t in enumerate(entry):
+
+def add_row(frame, entry):
+    rwl = len(entry["Categories"]["Points"])
+    cat_var_list = []
+    mod_frame = Frame(frame)
+    mod_frame.pack(fill=X)
+    c = 0
+
+    for i in entry["Categories"]:
+        if i == "Points":
+            entry["Categories"][i].append(IntVar())
+        else:
+            entry["Categories"][i].append(StringVar())
+    for i, t in enumerate(entry["Categories"]):
         if t == "Points":
-            ttk.Entry(frame, width=5, textvariable=entry["Points"][rwl]).grid(row=tempr, column=i)
+            ttk.Entry(mod_frame, width=10, textvariable=entry["Categories"]["Points"][rwl]).grid(row=0, column=i)
         elif t == "File Path":
-            frame.grid_columnconfigure(i, weight=1)
-            ttk.Entry(frame, textvariable=entry[t][rwl]).grid(row=tempr, column=i, sticky=EW)
-            ttk.Button(frame, text='...', command=lambda: entry[t][rwl].set(filedialog.askdirectory())).grid(row=tempr, column=i + 1)
+            mod_frame.grid_columnconfigure(i, weight=1)
+            ttk.Entry(mod_frame, textvariable=entry["Categories"][t][rwl]).grid(row=0, column=i, sticky=EW)
+            ttk.Button(mod_frame, text='...', command=lambda: entry["Categories"][t][rwl].set(filedialog.askdirectory())).grid(row=0, column=i + 1)
             c = i + 2
-        elif t == "Service Status":
-            ttk.OptionMenu(frame, entry[t][rwl], *["Running", "Stopped"]).grid(row=tempr, column=i, sticky=EW)
+        elif t == "Service Name":
+            mod_frame.grid_columnconfigure(i, weight=1)
+            service_list = get_service_list()
+            ttk.Combobox(mod_frame, textvariable=entry["Categories"][t][rwl], values=service_list).grid(row=0, column=i, sticky=EW)
             c = i + 1
-        elif t == "Service Start Type":
-            ttk.OptionMenu(frame, entry[t][rwl], *["Automatic", "Manual", "Disabled"]).grid(row=tempr, column=i, sticky=EW)
+        elif t == "Service State":
+            mod_frame.grid_columnconfigure(i, weight=1)
+            ttk.OptionMenu(mod_frame, entry["Categories"][t][rwl], *["Running", "Running", "Stopped"]).grid(row=0, column=i, sticky=EW)
+            c = i + 1
+        elif t == "Service Start Mode":
+            mod_frame.grid_columnconfigure(i, weight=1)
+            ttk.OptionMenu(mod_frame, entry["Categories"][t][rwl], *["Auto", "Auto", "Manual", "Disabled"]).grid(row=0, column=i, sticky=EW)
+            c = i + 1
+        elif t == "User Name":
+            mod_frame.grid_columnconfigure(i, weight=1)
+            user_list = get_user_list()
+            ttk.Combobox(mod_frame, textvariable=entry["Categories"][t][rwl], values=user_list).grid(row=0, column=i, sticky=EW)
+            c = i + 1
+        elif t == "Group Name":
+            mod_frame.grid_columnconfigure(i, weight=1)
+            group_list = get_group_list()
+            ttk.Combobox(mod_frame, textvariable=entry["Categories"][t][rwl], values=group_list).grid(row=0, column=i, sticky=EW)
             c = i + 1
         else:
-            ttk.Entry(frame, textvariable=entry[t][rwl]).grid(row=tempr, column=i, sticky=EW)
+            mod_frame.grid_columnconfigure(i, weight=1)
+            ttk.Entry(mod_frame, textvariable=entry["Categories"][t][rwl]).grid(row=0, column=i, sticky=EW)
             c = i + 1
-    ttk.Button(frame, text='X', command=lambda: remove_row(rwl, entry, widgets)).grid(row=tempr, column=c, sticky=W)
-    widgets.update({rwl: frame.grid_slaves(row=tempr)})
+        cat_var_list.append(entry["Categories"][t][rwl])
+    ttk.Button(mod_frame, text='X', width=8, command=lambda: remove_row(entry, cat_var_list, mod_frame)).grid(row=0, column=c, sticky=W)
 
 
-def remove_row(rem, entry, widgets):
-    for i in entry:
-        entry[i][rem] = 0
-    rem_row = widgets[rem][0].grid_info()['row']
-    for w in widgets[rem]:
-        w.destroy()
-    for i in widgets:
-        if i != rem and widgets[i][0].grid_info()['row'] > rem_row:
-            tempr = widgets[i][0].grid_info()['row'] - 1
-            for r in widgets[i]:
-                r.grid_configure(row=tempr)
-    del widgets[rem]
+def remove_row(entry, cat_var_list, widget):
+    for i in entry["Categories"]:
+        for cat_var in cat_var_list:
+            if cat_var in entry["Categories"][i]:
+                entry["Categories"][i].remove(cat_var)
+                cat_var_list.remove(cat_var)
+    widget.destroy()
 
 
 def create_forensic():
@@ -629,7 +678,7 @@ def load_config(forensic):
                     vulnerability_settings[s][m].set(save_dictionary[s][m])
             elif s == "Forensic":
                 for i in range(1, len(save_dictionary[s]["Categories"]["Points"])):
-                    add_row(forensic, vulnerability_settings["Forensic"]["Categories"], widgetDict["Forensic"], 2)
+                    add_row(forensic, vulnerability_settings["Forensic"])
                 for m in save_dictionary[s]["Categories"]:
                     for i, settings in enumerate(save_dictionary[s]["Categories"][m]):
                         vulnerability_settings[s]["Categories"][m][i].set(settings)
@@ -662,6 +711,30 @@ def set_desktop():
         vulnerability_settings["Main Menu"]["Desktop Entry"].set(cwd)
 
 
+def get_service_list():
+    services = wmi.Win32_SystemServices()
+    service_list = [services[0].PartComponent.Name]
+    for service in services:
+        service_list.append(service.PartComponent.Name)
+    return service_list
+
+
+def get_user_list():
+    users = wmi.Win32_UserAccount()
+    user_list = []
+    for user in users:
+        user_list.append(user.Name)
+    return user_list
+
+
+def get_group_list():
+    groups = wmi.Win32_Group()
+    group_list = []
+    for group in groups:
+        group_list.append(group.Name)
+    return group_list
+
+
 def show_error(self, *args):
     err = traceback.format_exception(*args)
     for i in err:
@@ -673,8 +746,9 @@ def show_error(self, *args):
 Tk.report_callback_exception = show_error
 
 vulnerability_settings = {}
-widgetDict = {"Forensic": {}, "Modify": {}, "Report": []}
 themeList = ["aquativo", "aquativo", "black", "clearlooks", "elegance", "equilux", "keramik", "plastik", "ubuntu"]
+
+wmi = WMI()
 
 root = Config()
 root.title('Configurator')

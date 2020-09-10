@@ -5,7 +5,8 @@ import time
 import datetime
 import balloontip
 import admin_test
-import tkinter
+import subprocess
+from wmi import WMI
 from tkinter import messagebox
 
 
@@ -112,87 +113,110 @@ def forensic_question():
 
 
 def disable_guest():
-    f = open('user.txt', 'r', encoding='utf-16-le')
-    content = f.read().splitlines()
-    f.close()
-    for c in content:
-        if 'Guest' in c:
-            if ' True' in c:
-                record_hit('The guest account haas been disabled.', save_dictionary["Account Management"]["Disable Guest"]["Categories"]['Points'][0], '')
-            else:
-                record_miss('User Management', save_dictionary["Account Management"]["Disable Guest"]["Categories"]['Points'][0])
+    guest = wmi.Win32_UserAccount(Name="Guest")[0]
+    if guest.Disabled:
+        record_hit('The guest account haas been disabled.', save_dictionary["Account Management"]["Disable Guest"]["Categories"]['Points'][0], '')
+    else:
+        record_miss('User Management', save_dictionary["Account Management"]["Disable Guest"]["Categories"]['Points'][0])
 
 
 def disable_admin():
-    f = open('user.txt', 'r', encoding='utf-16-le')
-    content = f.read().splitlines()
-    f.close()
-    for c in content:
-        if 'Administrator' in c:
-            if ' True' in c:
-                record_hit('The default administrator account has been disabled.', save_dictionary["Account Management"]["Disable Admin"]["Categories"]['Points'][0], '')
+    admin = wmi.Win32_UserAccount(Name="Administrator")[0]
+    if admin.Disabled:
+        record_hit('The default administrator account has been disabled.', save_dictionary["Account Management"]["Disable Admin"]["Categories"]['Points'][0], '')
+    else:
+        record_miss('User Management', save_dictionary["Account Management"]["Disable Admin"]["Categories"]['Points'][0])
+
+
+def users_manipulation():
+    users = wmi.Win32_UserAccount()
+    user_list = []
+    for user in users:
+        user_list.append(user.Name)
+    if save_dictionary["Account Management"]["Keep User"]["Enabled"] == 1:
+        for points, name in zip(save_dictionary["Account Management"]["Keep User"]["Categories"]['Points'], save_dictionary["Account Management"]["Keep User"]["Categories"]['User Name']):
+            if name not in user_list:
+                record_penalty(name + ' was removed.', points, '')
+    if save_dictionary["Account Management"]["Add User"]["Enabled"] == 1:
+        for points, name in zip(save_dictionary["Account Management"]["Add User"]["Categories"]['points'], save_dictionary["Account Management"]["Add User"]["Categories"]['User Name']):
+            if name in user_list:
+                record_hit(name + ' has been added.', points, '')
             else:
-                record_miss('User Management', save_dictionary["Account Management"]["Disable Admin"]["Categories"]['Points'][0])
+                record_miss('User Management', points)
+    if save_dictionary["Account Management"]["Remove User"]["Enabled"] == 1:
+        for points, name in enumerate(save_dictionary["Account Management"]["Remove User"]["Categories"]['Points'], save_dictionary["Account Management"]["Remove User"]["Categories"]['User Name']):
+            if name not in user_list:
+                record_hit(name + ' has been removed.', points, '')
+            else:
+                record_miss('User Management', points)
 
 
 def turn_on_firewall():
-    with open('status.txt') as t:
-        content = t.read().splitlines()
-    t.close()
-    for cont in content:
-        if 'State' in cont:
-            if 'ON' in cont:
-                record_hit('Firewall has been turned on.', save_dictionary["Local Policy Options"]["Turn On Firewall"]["Categories"]['Points'][0], '')
-            else:
-                record_miss('Policy Management', save_dictionary["Local Policy Options"]["Turn On Firewall"]["Categories"]['Points'][0])
-            return
+    firewall = subprocess.check_output(["netsh", 'advfirewall', 'show', 'all'])
+    firewall_profiles = firewall.decode('utf-8').split('\r\n\r\n\r\n')
+    if save_dictionary["Local Policy Options"]["Turn On Domain Firewall"]["Enabled"] == 1:
+        if 'ON' in firewall_profiles[0].split('\r\n', 4)[3]:
+            record_hit('Firewall has been turned on.', save_dictionary["Local Policy Options"]["Turn On Domain Firewall"]["Categories"]['Points'][0], '')
+        else:
+            record_miss('Policy Management', save_dictionary["Local Policy Options"]["Turn On Domain Firewall"]["Categories"]['Points'][0])
+    if save_dictionary["Local Policy Options"]["Turn On Private Firewall"]["Enabled"] == 1:
+        if 'ON' in firewall_profiles[1].split('\r\n', 3)[2]:
+            record_hit('Firewall has been turned on.', save_dictionary["Local Policy Options"]["Turn On Private Firewall"]["Categories"]['Points'][0], '')
+        else:
+            record_miss('Policy Management', save_dictionary["Local Policy Options"]["Turn On Private Firewall"]["Categories"]['Points'][0])
+    if save_dictionary["Local Policy Options"]["Turn On Public Firewall"]["Enabled"] == 1:
+        if 'ON' in firewall_profiles[2].split('\r\n', 3)[2]:
+            record_hit('Firewall has been turned on.', save_dictionary["Local Policy Options"]["Turn On Public Firewall"]["Categories"]['Points'][0], '')
+        else:
+            record_miss('Policy Management', save_dictionary["Local Policy Options"]["Turn On Public Firewall"]["Categories"]['Points'][0])
 
 
 def local_group_policy():
-    p = open('group-policy.txt', 'r', encoding='utf-16-le')
+    os.system('secedit /export /cfg group-policy.inf')
+    p = open('group-policy.inf', 'r', encoding='utf-16-le')
     content = p.read().splitlines()
     p.close()
     for i in content:
         if 'MinimumPasswordAge' in i:
             if save_dictionary["Local Policy Password"]["Minimum Password Age"]["Enabled"] == 1:
-                if i.endswith(('30', '45', '60')):
+                if 30 <= int(i.rsplit('=', 1)[1]) <= 60:
                     record_hit('Minimum password age is set to 30-60.', save_dictionary["Local Policy Password"]["Minimum Password Age"]["Categories"]['Points'][0], '')
                 else:
                     record_miss('Policy Management', save_dictionary["Local Policy Password"]["Minimum Password Age"]["Categories"]['Points'][0])
         elif 'MaximumPasswordAge ' in i:
             if save_dictionary["Local Policy Password"]["Maximum Password Age"]["Enabled"] == 1:
-                if i.endswith(('60', '75', '90')):
+                if 60 <= int(i.rsplit('=', 1)[1]) <= 90:
                     record_hit('Maximum password age is set to 60-90.', save_dictionary["Local Policy Password"]["Maximum Password Age"]["Categories"]['Points'][0], '')
                 else:
                     record_miss('Policy Management', save_dictionary["Local Policy Password"]["Maximum Password Age"]["Categories"]['Points'][0])
         elif 'LockoutBadCount' in i:
             if save_dictionary["Local Policy Password"]["Maximum Login Tries"]["Enabled"] == 1:
-                if i.endswith(('5', '6', '7', '8', '9', '10')):
+                if 5 <= int(i.rsplit('=', 1)[1]) <= 10:
                     record_hit('Maximum login tries is set to 5-10.', save_dictionary["Local Policy Password"]["Maximum Login Tries"]["Categories"]['Points'][0], '')
                 else:
                     record_miss('Policy Management', save_dictionary["Local Policy Password"]["Maximum Login Tries"]["Categories"]['Points'][0])
         elif 'LockoutDuration' in i:
             if save_dictionary["Local Policy Password"]["Lockout Duration"]["Enabled"] == 1:
-                if i.endswith('30'):
+                if 30 <= int(i.rsplit('=', 1)[1]):
                     record_hit('Lockout duration set is set to 30.', save_dictionary["Local Policy Password"]["Lockout Duration"]["Categories"]['Points'][0], '')
                 else:
                     record_miss('Policy Management', save_dictionary["Local Policy Password"]["Lockout Duration"]["Categories"]['Points'][0])
         elif 'ResetLockoutCount' in i:
             if save_dictionary["Local Policy Password"]["Lockout Reset Duration"]["Enabled"] == 1:
-                if i.endswith('30'):
+                if 30 <= int(i.rsplit('=', 1)[1]):
                     record_hit('Lockout counter reset is set to 30.', save_dictionary["Local Policy Password"]["Lockout Reset Duration"]["Categories"]['Points'][0], '')
                 else:
                     record_miss('Policy Management', save_dictionary["Local Policy Password"]["Lockout Reset Duration"]["Categories"]['Points'][0])
         elif 'MinimumPasswordLength' in i:
             if save_dictionary["Local Policy Password"]["Minimum Password Length"]["Enabled"] == 1:
-                if i.endswith(('10', '11', '12', '13', '14', '15', '16' '17', '18', '19', '20')):
-                    record_hit('Minimum password length is set to 10-29.', save_dictionary["Local Policy Password"]["Minimum Password Length"]["Categories"]['Points'][0], '')
+                if 10 <= int(i.rsplit('=', 1)[1]):
+                    record_hit('Minimum password length is set to 10 or more.', save_dictionary["Local Policy Password"]["Minimum Password Length"]["Categories"]['Points'][0], '')
                 else:
                     record_miss('Policy Management', save_dictionary["Local Policy Password"]["Minimum Password Length"]["Categories"]['Points'][0])
         elif 'PasswordHistorySize' in i:
             if save_dictionary["Local Policy Password"]["Password History"]["Enabled"] == 1:
-                if i.endswith(('5', '6', '7', '8', '9', '10')):
-                    record_hit('Password history size is set to 5-10.', save_dictionary["Local Policy Password"]["Password History"]["Categories"]['Points'][0], '')
+                if 5 <= int(i.rsplit('=', 1)[1]):
+                    record_hit('Password history size is set to 5 or more.', save_dictionary["Local Policy Password"]["Password History"]["Categories"]['Points'][0], '')
                 else:
                     record_miss('Policy Management', save_dictionary["Local Policy Password"]["Password History"]["Categories"]['Points'][0])
         elif 'PasswordComplexity' in i:
@@ -275,106 +299,55 @@ def local_group_policy():
                     record_miss('Policy Management', save_dictionary["Local Policy Options"]["Don't Display Last User"]["Categories"]['Points'][0])
 
 
-def keep_user():
-    with open('users.txt') as t:
-        content = t.read()
-    t.close()
-    for idx, name in enumerate(save_dictionary["Account Management"]["Keep User"]["Categories"]['User Name']):
-        if name.lower() not in content.lower():
-            record_penalty(name + ' was removed.', save_dictionary["Account Management"]["Keep User"]["Categories"]['Points'][idx], '')
-
-
-def add_user():
-    with open('users.txt') as t:
-        content = t.read()
-    t.close()
-    for idx, name in enumerate(save_dictionary["Account Management"]["Add User"]["Categories"]['User Name']):
-        if name.lower() in content.lower():
-            record_hit(name + ' has been added', save_dictionary["Account Management"]["Add User"]["Categories"]['Points'][idx], '')
+def group_manipulation():
+    groups = wmi.Win32_UserAccount()
+    group_list = {}
+    for group in groups:
+        if group.GroupComponent.Name in group_list:
+            group_list[group.GroupComponent.Name].append(group.PartComponent.Name)
         else:
-            record_miss('User Management', save_dictionary["Account Management"]["Add User"]["Categories"]['Points'][idx])
-
-
-def remove_user():
-    with open('users.txt') as t:
-        content = t.read()
-    t.close()
-    for idx, name in enumerate(save_dictionary["Account Management"]["Remove User"]["Categories"]['User Name']):
-        if name.lower() not in content.lower():
-            record_hit(name + ' has been removed.', save_dictionary["Account Management"]["Remove User"]["Categories"]['Points'][idx], '')
-        else:
-            record_miss('User Management', save_dictionary["Account Management"]["Remove User"]["Categories"]['Points'][idx])
-
-
-def add_admin():
-    with open('admins.txt') as t:
-        content = t.read()
-    t.close()
-    for idx, name in enumerate(save_dictionary["Account Management"]["Add Admin"]["Categories"]['User Name']):
-        if name.lower() in content.lower():
-            record_hit(name + ' has been promoted to administrator.', save_dictionary["Account Management"]["Add Admin"]["Categories"]['Points'][idx], '')
-        else:
-            record_miss('User Management', save_dictionary["Account Management"]["Add Admin"]["Categories"]['Points'][idx])
-
-
-def remove_admin():
-    with open('admins.txt') as t:
-        content = t.read()
-    t.close()
-    for idx, name in enumerate(save_dictionary["Account Management"]["Remove Admin"]["Categories"]['User Name']):
-        if name.lower() not in content.lower():
-            record_hit(name + ' has been demoted to standard user.', save_dictionary["Account Management"]["Remove Admin"]["Categories"]['Points'][idx], '')
-        else:
-            record_miss('User Management', save_dictionary["Account Management"]["Remove Admin"]["Categories"]['Points'][idx])
-
-
-def add_user_to_group():
-    for idx, name in enumerate(save_dictionary["Account Management"]['Add User to Group']["Categories"]['Group Name']):
-        with open(name.lower() + '_add_groups.txt') as t:
-            content = t.read()
-        t.close()
-        if save_dictionary["Account Management"]['Add User to Group']["Categories"]['User Name'][idx].lower() in content.lower():
-            record_hit(save_dictionary["Account Management"]['Add User to Group']["Categories"]['User Name'][idx] + ' is in the ' + name + ' group.', save_dictionary["Account Management"]['Add User to Group']["Categories"]['Points'][idx], '')
-        else:
-            record_miss('User Management', save_dictionary["Account Management"]['Add User to Group']["Categories"]['Points'][idx])
-
-
-def remove_user_from_group():
-    for idx, name in enumerate(save_dictionary["Account Management"]['Remove User from Group']["Categories"]['Group Name']):
-        with open(name.lower() + '_rem_groups.txt') as t:
-            content = t.read()
-        t.close()
-        if save_dictionary["Account Management"]['Remove User from Group']["Categories"]['User Name'][idx].lower() not in content.lower():
-            record_hit(save_dictionary["Account Management"]['Remove User from Group']["Categories"]['User Name'][idx] + ' is no longer in the ' + name + ' group.', save_dictionary["Account Management"]['Remove User from Group']["Categories"]['Points'][idx], '')
-        else:
-            record_miss('User Management', save_dictionary["Account Management"]['Remove User from Group']["Categories"]['Points'][idx])
+            group_list.update({group.GroupComponent.Name: [group.PartComponent.Name]})
+    if save_dictionary["Account Management"]["Add Admin"]["Enabled"] == 1:
+        for points, user in zip(save_dictionary["Account Management"]["Add Admin"]["Categories"]['Points'], save_dictionary["Account Management"]["Add Admin"]["Categories"]['User Name']):
+            if user in group_list["Administrators"]:
+                record_hit(user + ' has been promoted to administrator.', points, '')
+            else:
+                record_miss('User Management', points)
+    if save_dictionary["Account Management"]["Remove Admin"]["Enabled"] == 1:
+        for points, user in zip(save_dictionary["Account Management"]["Remove Admin"]["Categories"]['Points'], save_dictionary["Account Management"]["Remove Admin"]["Categories"]['User Name']):
+            if user not in group_list["Administrators"]:
+                record_hit(user + ' has been demoted to standard user.', points, '')
+            else:
+                record_miss('User Management', points)
+    if save_dictionary["Account Management"]["Add User to Group"]["Enabled"] == 1:
+        for points, group, user in zip(save_dictionary["Account Management"]['Add User to Group']["Categories"]['Points'], save_dictionary["Account Management"]['Add User to Group']["Categories"]['Group Name'], save_dictionary["Account Management"]['Add User to Group']["Categories"]['User Name']):
+            if user in group_list[group]:
+                record_hit(user + ' is in the ' + group + ' group.', points, '')
+            else:
+                record_miss('User Management', points)
+    if save_dictionary["Account Management"]["Remove User from Group"]["Enabled"] == 1:
+        for points, group, user in zip(save_dictionary["Account Management"]['Remove User from Group']["Categories"]['Points'], save_dictionary["Account Management"]['Remove User from Group']["Categories"]['Group Name'], save_dictionary["Account Management"]['Remove User from Group']["Categories"]['User Name']):
+            if user not in group_list[group]:
+                record_hit(user + ' is no longer in the ' + group + ' group.', points, '')
+            else:
+                record_miss('User Management', points)
 
 
 def user_change_password():
-    for idx, name in enumerate(save_dictionary["Account Management"]["User Change Password"]["Categories"]['User Name']):
-        f = open('user_' + name.lower() + '.txt')
-        content = f.read().splitlines()
-        f.close()
-        for c in content:
-            if 'Password last set' in c:
-                s = c.split(' ')
-                for t in s:
-                    if '/' in t:
-                        c = ''
-                        t = t.split('/')
-                        for p, d in enumerate(t):
-                            if int(d) < 10:
-                                temp = '0' + d
-                            else:
-                                temp = d
-                            if p < 2:
-                                c = c + temp + '/'
-                            else:
-                                c = c + d
-                if datetime.datetime.now().strftime('%m/%d/%Y') == c:
-                    record_hit(name + '\'s password was changed.', save_dictionary["Account Management"]["User Change Password"]["Categories"]['Points'][idx], '')
-                else:
-                    record_miss('Policy Management', save_dictionary["Account Management"]["User Change Password"]["Categories"]['Points'][idx])
+    for points, name in zip(save_dictionary["Account Management"]["User Change Password"]["Categories"]['Points'], save_dictionary["Account Management"]["User Change Password"]["Categories"]['User Name']):
+        user_info = subprocess.check_output(["net", "user", name])
+        last_changed_list = user_info.decode('utf-8').split('\r\n')[8].rsplit(' ', 3)[1].split('/')
+        last_changed = ''
+        for date in last_changed_list:
+            if int(date) < 10:
+                temp = '0' + date
+            else:
+                temp = date
+            last_changed = last_changed + temp + '/'
+        if datetime.datetime.now().strftime('%m/%d/%Y') == last_changed.rsplit('/', 1)[0]:
+            record_hit(name + '\'s password was changed.', points, '')
+        else:
+            record_miss('Policy Management', points)
 
 
 def check_startup():
@@ -389,64 +362,73 @@ def check_startup():
 
 
 def add_text_to_file():
-    for idx, item in enumerate(save_dictionary["File Management"]["Add Text to File"]["Categories"]['File Path']):
+    for points, item, text in zip(save_dictionary["File Management"]["Add Text to File"]["Categories"]['Points'], save_dictionary["File Management"]["Add Text to File"]["Categories"]['File Path'], save_dictionary["File Management"]["Add Text to File"]["Categories"]['Text to Add']):
         f = open(item, 'r')
         content = f.read().splitlines()
         for c in content:
-            if save_dictionary["File Management"]["Add Text to File"]["Categories"]['Text to Add'][idx] in c:
-                record_hit(save_dictionary["File Management"]["Add Text to File"]["Categories"]['Text to Add'][idx] + ' has been added to ' + item, save_dictionary["File Management"]["Add Text to File"]["Categories"]['Points'][idx], '')
+            if text in c:
+                record_hit(text + ' has been added to ' + item, points, '')
             else:
-                record_miss('File Management', save_dictionary["File Management"]["Add Text to File"]["Categories"]['Points'][idx])
+                record_miss('File Management', points)
 
 
 def remove_text_from_file():
-    for idx, item in enumerate(save_dictionary["File Management"]["Remove Text From File"]["Categories"]['File Path']):
+    for points, item, text in zip(save_dictionary["File Management"]["Remove Text From File"]["Categories"]['Points'], save_dictionary["File Management"]["Remove Text From File"]["Categories"]['File Path'], save_dictionary["File Management"]["Remove Text From File"]["Categories"]['Text to Remove']):
         f = open(item, 'r')
         content = f.read().splitlines()
         for c in content:
-            if save_dictionary["File Management"]["Remove Text From File"]["Categories"]['Text to Remove'][idx] not in c:
-                record_hit(save_dictionary["File Management"]["Remove Text From File"]["Categories"]['Text to Remove'][idx] + ' has been removed from ' + item, save_dictionary["File Management"]["Remove Text From File"]["Categories"]['Points'][idx], '')
+            if text not in c:
+                record_hit(text + ' has been removed from ' + item, points, '')
             else:
-                record_miss('File Management', save_dictionary["File Management"]["Remove Text From File"]["Categories"]['Points'][idx])
+                record_miss('File Management', points)
 
 
-def services():
-    p = open('services.txt', 'r', encoding='utf-16-le')
-    content = p.read().splitlines()
-    p.close()
-    for c in content:
-        for idx, bs in save_dictionary["Program Management"]["Service"]["Categories"]['Service Name']:
-            if bs in c:
-                if save_dictionary["Program Management"]["Service"]["Categories"]['Service Status'][idx] in c and save_dictionary["Program Management"]["Service"]["Categories"]['Service Start Type'][idx] in c:
-                    record_hit(bs + ' has been ' + save_dictionary["Program Management"]["Service"]["Categories"]['Service Status'][idx] + ' and set to ' + save_dictionary["Program Management"]["Service"]["Categories"]['Service Start Type'][idx], save_dictionary["Program Management"]["Service"]["Categories"]['Points'][idx], '')
-                else:
-                    record_miss('Program Management', save_dictionary["Program Management"]["Service"]["Categories"]['Points'][idx])
+def manage_services():
+    services = wmi.Win32_SystemServices()
+    service_list = {}
+    service_status = {}
+    for service in services:
+        service_list.update({service.PartComponent.DisplayName: service.PartComponent.Name})
+        service_status.update({service.PartComponent.Name: {"State": service.PartComponent.State, "Start Mode": service.PartComponent.StartMode}})
+
+    for points, name, status, start in zip(save_dictionary["Program Management"]["Service"]["Categories"]['Points'],
+                                           save_dictionary["Program Management"]["Service"]["Categories"]['Service Name'],
+                                           save_dictionary["Program Management"]["Service"]["Categories"]['Service State'],
+                                           save_dictionary["Program Management"]["Service"]["Categories"]['Service Start mode']):
+        if name in service_list:
+            name = service_list[name]
+        if name in service_status:
+            service_info = service_status[name]
+            if status == service_info["State"] and start == service_info["Start Mode"]:
+                record_hit(name + ' has been ' + status + ' and set to ' + start, points, '')
+            else:
+                record_miss('Program Management', points)
 
 
-def programs(option):
+def programs():
     k = open('programs.txt', 'r', encoding='utf-16-le')
     content = k.read().splitlines()
     k.close()
-    if option == 'good_program':
-        for idx, gp in save_dictionary["Program Management"]["Good Program"]["Categories"]['Program Name']:
+    if save_dictionary["Program Management"]["Good Program"]["Enabled"] == 1:
+        for points, gp in zip(save_dictionary["Program Management"]["Good Program"]["Categories"]['Points'], save_dictionary["Program Management"]["Good Program"]["Categories"]['Program Name']):
             installed = False
             for c in content:
                 if gp in c:
                     installed = True
             if installed:
-                record_hit(gp + ' is installed', save_dictionary["Program Management"]["Good Program"]["Categories"]['Points'][idx], '')
+                record_hit(gp + ' is installed', points, '')
             else:
-                record_miss('Program Management', save_dictionary["Program Management"]["Good Program"]["Categories"]['Points'][idx])
-    if option == 'bad_program':
-        for idx, bp in save_dictionary["Program Management"]["Bad Program"]["Categories"]['Program Name']:
+                record_miss('Program Management', points)
+    if save_dictionary["Program Management"]["Bad Program"]["Enabled"] == 1:
+        for points, bp in zip(save_dictionary["Program Management"]["Bad Program"]["Categories"]['Points'], save_dictionary["Program Management"]["Bad Program"]["Categories"]['Program Name']):
             installed = False
             for c in content:
                 if bp in c:
                     installed = True
             if not installed:
-                record_hit(bp + ' is uninstalled', save_dictionary["Program Management"]["Bad Program"]["Categories"]['Points'][idx], '')
+                record_hit(bp + ' is uninstalled', points, '')
             else:
-                record_miss('Program Management', save_dictionary["Program Management"]["Bad Program"]["Categories"]['Points'][idx])
+                record_miss('Program Management', points)
 
 
 def anti_virus():
@@ -460,11 +442,11 @@ def anti_virus():
 
 
 def bad_file():
-    for idx, item in enumerate(save_dictionary["File Management"]["Bad File"]["Categories"]['File Path']):
+    for points, item in zip(save_dictionary["File Management"]["Bad File"]["Categories"]['Points'], save_dictionary["File Management"]["Bad File"]["Categories"]['File Path']):
         if not os.path.exists(item):
-            record_hit('The item ' + item + ' has been removed.', save_dictionary["File Management"]["Bad File"]["Categories"]['Points'][idx], '')
+            record_hit('The item ' + item + ' has been removed.', points, '')
         else:
-            record_miss('File Management', save_dictionary["File Management"]["Bad File"]["Categories"]['Points'][idx])
+            record_miss('File Management', points)
 
 
 def load_config():
@@ -480,37 +462,14 @@ def load_config():
 
 def ps_create():
     m = open('check.ps1', 'w+')
-    if save_dictionary["Account Management"]["Disable Guest"]["Enabled"] == 1 or save_dictionary["Account Management"]["Disable Admin"]["Enabled"] == 1:
-        m.write('Get-WmiObject -Class Win32_UserAccount -Filter "LocalAccount=\'$true\'"|Select-Object Name,Disabled|Format-Table -AutoSize > user.txt\n')
-    if save_dictionary["Program Management"]["Services"]["Enabled"] == 1:
-        m.write('Get-Service | Select-Object Name,status,startType | Format-Table -AutoSize > services.txt\n')
     if save_dictionary["Program Management"]["Bad Program"]["Enabled"] == 1 or save_dictionary["Program Management"]["Good Program"]["Enabled"] == 1:
         m.write('Get-ItemProperty HKLM:\\Software\\Wow6432Node\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\* | Select-Object DisplayName, DisplayVersion, Publisher, InstallDate | Format-Table -AutoSize > programs.txt\n')
-    if save_dictionary["Miscellaneous"]["Check Startup"]["Enabled"] == 1:
-        m.write('Get-CimInstance -ClassName Win32_StartupCommand | Select-Object -Property Command, Description, User, Location | Format-Table -AutoSize > startup.txt\n')
     if save_dictionary["Miscellaneous"]["Anti-Virus"]["Enabled"] == 1:
         m.write('function Get-AntiVirusProduct {\n[CmdletBinding()]\nparam (\n[parameter(ValueFromPipeline=$true, ValueFromPipelineByPropertyName=$true)]\n[Alias(\'name\')]\n$computername=$env:computername\n\n)\n\n#$AntivirusProducts = Get-WmiObject -Namespace "root\\SecurityCenter2" -Query $wmiQuery  @psboundparameters # -ErrorVariable myError -ErrorAction \'SilentlyContinue\' # did not work\n$AntiVirusProducts = Get-WmiObject -Namespace "root\\SecurityCenter2" -Class AntiVirusProduct  -ComputerName $computername\n\n$ret = @()\nforeach($AntiVirusProduct in $AntiVirusProducts){\n#Switch to determine the status of antivirus definitions and real-time protection.\n#The values in this switch-statement are retrieved from the following website: http://community.kaseya.com/resources/m/knowexch/1020.aspx\nswitch ($AntiVirusProduct.productState) {\n"262144" {$defstatus = "Up to date" ;$rtstatus = "Disabled"}\n"262160" {$defstatus = "Out of date" ;$rtstatus = "Disabled"}\n"266240" {$defstatus = "Up to date" ;$rtstatus = "Enabled"}\n"266256" {$defstatus = "Out of date" ;$rtstatus = "Enabled"}\n"393216" {$defstatus = "Up to date" ;$rtstatus = "Disabled"}\n"393232" {$defstatus = "Out of date" ;$rtstatus = "Disabled"}\n"393488" {$defstatus = "Out of date" ;$rtstatus = "Disabled"}\n"397312" {$defstatus = "Up to date" ;$rtstatus = "Enabled"}\n"397328" {$defstatus = "Out of date" ;$rtstatus = "Enabled"}\n"397584" {$defstatus = "Out of date" ;$rtstatus = "Enabled"}\ndefault {$defstatus = "Unknown" ;$rtstatus = "Unknown"}\n}\n\n#Create hash-table for each computer\n$ht = @{}\n$ht.Computername = $computername\n$ht.Name = $AntiVirusProduct.displayName\n$ht.\'Product GUID\' = $AntiVirusProduct.instanceGuid\n$ht.\'Product Executable\' = $AntiVirusProduct.pathToSignedProductExe\n$ht.\'Reporting Exe\' = $AntiVirusProduct.pathToSignedReportingExe\n$ht.\'Definition Status\' = $defstatus\n$ht.\'Real-time Protection Status\' = $rtstatus\n\n#Create a new object for each computer\n$ret += New-Object -TypeName PSObject -Property $ht \n}\nReturn $ret\n} \nGet-AntiVirusProduct > security.txt\n')
     m.close()
     m = open('check.bat', 'w+')
     m.write('echo > trigger.cfg\n')
-    if save_dictionary["Account Management"]["Keep User"]["Enabled"] == 1 or save_dictionary["Account Management"]["Remove User"]["Enabled"] == 1 or save_dictionary["Account Management"]["Add User"]["Enabled"] == 1:
-        m.write('net users > users.txt\n')
-    if save_dictionary["Account Management"]["User Change Password"]["Enabled"] == 1:
-        for name in save_dictionary["Account Management"]["User Change Password"]["Categories"]['User Name']:
-            m.write('net user ' + name.lower() + ' > user_' + name.lower() + '.txt\n')
-    if save_dictionary["Account Management"]["Add Admin"]["Enabled"] == 1 or save_dictionary["Account Management"]["Remove Admin"]["Enabled"] == 1:
-        m.write('net localgroup Administrators > admins.txt\n')
-    if save_dictionary["Account Management"]["Add User to Group"]["Enabled"] == 1:
-        for item in save_dictionary["Account Management"]['Add User to Group']["Categories"]['Group Name']:
-            m.write('net localgroup ' + item.lower() + ' > ' + item.lower() + '_add_groups.txt\n')
-    if save_dictionary["Account Management"]["Remove User from Group"]["Enabled"] == 1:
-        for item in save_dictionary["Account Management"]['Remove User from Group']["Categories"]['Group Name']:
-            m.write('net localgroup ' + item.lower() + ' > ' + item.lower() + '_rem_groups.txt\n')
-    if save_dictionary["Local Policy Options"]["Turn On Firewall"]["Enabled"] == 1:
-        m.write('netsh advfirewall show private > status.txt\nnetsh advfirewall show public >> status.txt\n')
-    if save_dictionary["Local Policy Password"]["Minimum Password Age"]["Enabled"] == 1 or save_dictionary["Local Policy Password"]["Maximum Password Age"]["Enabled"] == 1 or save_dictionary["Local Policy Password"]["Maximum Login Tries"]["Enabled"] == 1 or save_dictionary["Local Policy Password"]["Lockout Duration"]["Enabled"] == 1 or save_dictionary["Local Policy Password"]["Lockout Reset Duration"]["Enabled"] == 1 or save_dictionary["Local Policy Password"]["Minimum Password Length"]["Enabled"] == 1 or save_dictionary["Local Policy Password"]["Password History"]["Enabled"] == 1 or save_dictionary["Local Policy Password"]["Password Complexity"]["Enabled"] == 1 or save_dictionary["Local Policy Password"]["Reversible Password Encryption"]["Enabled"] == 1 or save_dictionary["Local Policy Options"]["Do Not Require CTRL_ALT_DEL"]["Enabled"] == 1 or save_dictionary["Local Policy Options"]["Don't Display Last User"]["Enabled"] == 1 or save_dictionary["Local Policy Audit"]["Audit Account Login"]["Enabled"] == 1 or save_dictionary["Local Policy Audit"]["Audit Account Management"]["Enabled"] == 1 or save_dictionary["Local Policy Audit"]["Audit Directory Settings Access"]["Enabled"] == 1 or save_dictionary["Local Policy Audit"]["Audit Logon Events"]["Enabled"] == 1 or save_dictionary["Local Policy Audit"]["Audit Object Access"]["Enabled"] == 1 or save_dictionary["Local Policy Audit"]["Audit Policy Change"]["Enabled"] == 1 or save_dictionary["Local Policy Audit"]["Audit Privilege Use"]["Enabled"] == 1 or save_dictionary["Local Policy Audit"]["Audit Process Tracking"]["Enabled"] == 1 or save_dictionary["Local Policy Audit"]["Audit System Events"]["Enabled"] == 1:
-        m.write('secedit /export /cfg group-policy.txt\n')
-    if save_dictionary["File Management"]["Bad File"]["Enabled"] == 1 or save_dictionary["Account Management"]["Disable Guest"]["Enabled"] == 1 or save_dictionary["Account Management"]["Disable Admin"]["Enabled"] == 1 or save_dictionary["Program Management"]["Services"]["Enabled"] == 1 or save_dictionary["Program Management"]["Good Program"]["Enabled"] == 1 or save_dictionary["Miscellaneous"]["Check Startup"]["Enabled"] == 1 or save_dictionary["Miscellaneous"]["Anti-Virus"]["Enabled"] == 1:
+    if save_dictionary["Program Management"]["Bad Program"]["Enabled"] == 1 or save_dictionary["Program Management"]["Good Program"]["Enabled"] == 1 or save_dictionary["Miscellaneous"]["Anti-Virus"]["Enabled"] == 1:
         m.write('Powershell.exe -Command "& {Start-Process Powershell.exe -ArgumentList \'-ExecutionPolicy Bypass -File "check.ps1"\' -Verb RunAs -Wait -WindowStyle Hidden}"\n')
     m.write('timeout 60')
     m.close()
@@ -518,34 +477,16 @@ def ps_create():
     f.write('CreateObject("Wscript.Shell").Run """" & WScript.Arguments(0) & """", 0, False')
     f.close()
     os.system('wscript.exe "invisible.vbs" "check.bat"')
-    '''
-    if save_dictionary["Miscellaneous"]["Task Scheduler"]["Enabled"] == 1:
-        ''taskscheduler()''
-    if save_dictionary['checkHosts']["Enabled"] == 1:
-        ''checkhosts()''
-    if save_dictionary["Miscellaneous"]["Update Auto Install"]["Enabled"] == 1:
-        ''updateautoinstall()''
-    '''
 
 
 def user_management():
     write_to_html('<H3>USER MANAGEMENT</H3>')
-    if save_dictionary["Account Management"]["Keep User"]["Enabled"] == 1:
-        keep_user()
-    if save_dictionary["Account Management"]["Remove User"]["Enabled"] == 1:
-        remove_user()
-    if save_dictionary["Account Management"]["Add User"]["Enabled"] == 1:
-        add_user()
+    if save_dictionary["Account Management"]["Keep User"]["Enabled"] == 1 or save_dictionary["Account Management"]["Add User"]["Enabled"] == 1 or save_dictionary["Account Management"]["Remove User"]["Enabled"] == 1:
+        users_manipulation()
     if save_dictionary["Account Management"]["User Change Password"]["Enabled"] == 1:
         user_change_password()
-    if save_dictionary["Account Management"]["Add Admin"]["Enabled"] == 1:
-        add_admin()
-    if save_dictionary["Account Management"]["Remove Admin"]["Enabled"] == 1:
-        remove_admin()
-    if save_dictionary["Account Management"]["Add User to Group"]["Enabled"] == 1:
-        add_user_to_group()
-    if save_dictionary["Account Management"]["Remove User from Group"]["Enabled"] == 1:
-        remove_user_from_group()
+    if save_dictionary["Account Management"]["Add Admin"]["Enabled"] == 1 or save_dictionary["Account Management"]["Remove Admin"]["Enabled"] == 1 or save_dictionary["Account Management"]["Add User to Group"]["Enabled"] == 1 or save_dictionary["Account Management"]["Remove User from Group"]["Enabled"] == 1:
+        group_manipulation()
 
 
 def security_policies():
@@ -554,7 +495,7 @@ def security_policies():
         disable_guest()
     if save_dictionary["Account Management"]["Disable Admin"]["Enabled"] == 1:
         disable_admin()
-    if save_dictionary["Local Policy Options"]["Turn On Firewall"]["Enabled"] == 1:
+    if save_dictionary["Local Policy Options"]["Turn On Domain Firewall"]["Enabled"] == 1 or save_dictionary["Local Policy Options"]["Turn On Private Firewall"]["Enabled"] == 1 or save_dictionary["Local Policy Options"]["Turn On Public Firewall"]["Enabled"] == 1:
         turn_on_firewall()
     if save_dictionary["Local Policy Password"]["Minimum Password Age"]["Enabled"] == 1 or save_dictionary["Local Policy Password"]["Maximum Password Age"]["Enabled"] == 1 or save_dictionary["Local Policy Password"]["Maximum Login Tries"]["Enabled"] == 1 or save_dictionary["Local Policy Password"]["Lockout Duration"]["Enabled"] == 1 or save_dictionary["Local Policy Password"]["Lockout Reset Duration"]["Enabled"] == 1 or save_dictionary["Local Policy Password"]["Minimum Password Length"]["Enabled"] == 1 or save_dictionary["Local Policy Password"]["Password History"]["Enabled"] == 1 or save_dictionary["Local Policy Password"]["Password Complexity"]["Enabled"] == 1 or save_dictionary["Local Policy Password"]["Reversible Password Encryption"]["Enabled"] == 1 or save_dictionary["Local Policy Options"]["Do Not Require CTRL_ALT_DEL"]["Enabled"] == 1 or save_dictionary["Local Policy Options"]["Don't Display Last User"]["Enabled"] == 1 or save_dictionary["Local Policy Audit"]["Audit Account Login"]["Enabled"] == 1 or save_dictionary["Local Policy Audit"]["Audit Account Management"]["Enabled"] == 1 or save_dictionary["Local Policy Audit"]["Audit Directory Settings Access"]["Enabled"] == 1 or save_dictionary["Local Policy Audit"]["Audit Logon Events"]["Enabled"] == 1 or save_dictionary["Local Policy Audit"]["Audit Object Access"]["Enabled"] == 1 or save_dictionary["Local Policy Audit"]["Audit Policy Change"]["Enabled"] == 1 or save_dictionary["Local Policy Audit"]["Audit Privilege Use"]["Enabled"] == 1 or save_dictionary["Local Policy Audit"]["Audit Process Tracking"]["Enabled"] == 1 or save_dictionary["Local Policy Audit"]["Audit System Events"]["Enabled"] == 1:
         local_group_policy()
@@ -562,12 +503,10 @@ def security_policies():
 
 def program_management():
     write_to_html('<H3>PROGRAMS</H3>')
-    if save_dictionary["Program Management"]["Good Program"]["Enabled"] == 1:
-        programs('good_Program')
-    if save_dictionary["Program Management"]["Bad Program"]["Enabled"] == 1:
-        programs('bad_Program')
+    if save_dictionary["Program Management"]["Good Program"]["Enabled"] == 1 or save_dictionary["Program Management"]["Bad Program"]["Enabled"] == 1:
+        programs()
     if save_dictionary["Program Management"]["Services"]["Enabled"] == 1:
-        services()
+        manage_services()
 
 
 def file_management():
@@ -576,8 +515,8 @@ def file_management():
         forensic_question()
     if save_dictionary["File Management"]["Bad File"]["Enabled"] == 1:
         bad_file()
-    if save_dictionary["File Management"]['Check Hosts']["Enabled"] == 1:
-        '''checkhosts()'''
+    # if save_dictionary["File Management"]['Check Hosts']["Enabled"] == 1:
+    # check_hosts()
     if save_dictionary["File Management"]["Add Text to File"]["Enabled"] == 1:
         add_text_to_file()
     if save_dictionary["File Management"]["Remove Text From File"]["Enabled"] == 1:
@@ -586,21 +525,17 @@ def file_management():
 
 def miscellaneous():
     write_to_html('<H3>MISCELLANEOUS</H3>')
-    if save_dictionary["Miscellaneous"]["Check Startup"]["Enabled"] == 1:
-        check_startup()
-    if save_dictionary["Miscellaneous"]["Task Scheduler"]["Enabled"] == 1:
-        '''taskscheduler()'''
+    # if save_dictionary["Miscellaneous"]["Check Startup"]["Enabled"] == 1:
+    # check_startup()
+    # if save_dictionary["Miscellaneous"]["Task Scheduler"]["Enabled"] == 1:
+    # task_scheduler()
     if save_dictionary["Miscellaneous"]["Anti-Virus"]["Enabled"] == 1:
         anti_virus()
-    if save_dictionary["Miscellaneous"]["Update Auto Install"]["Enabled"] == 1:
-        '''updateautoinstall()'''
+    # if save_dictionary["Miscellaneous"]["Update Auto Install"]["Enabled"] == 1:
+    # update_auto_install()
 
 
-def show_error(self, *args):
-    err = tkinter.traceback.format_exception(*args)
-    messagebox.showerror('Exception', err)
-
-
+wmi = WMI()
 load_config()
 possible_points = 0
 possible_vulnerabilities = 0
@@ -611,7 +546,6 @@ Desktop = save_dictionary["Main Menu"]["Desktop Entry"]
 index = 'C:/CyberPatriot/'
 scoreIndex = index + 'ScoreReport.html'
 
-tkinter.Tk.report_callback_exception = show_error
 # --------- Main Loop ---------#
 w = balloontip.WindowsBalloonTip()
 check_runas()
