@@ -1,7 +1,7 @@
 # CSEW (WIP)
 ## Cyberpatriot Scoring Engine: Windows
 
-CSEW is a scoring engine written in bash for scoring Windows CyberPatriot images. It is configured by adding scoring options into the `save_data.json` and moving everything to where it needs to be and setting up the scoring engine for auto running. It now includes a web page Score Report. It works (to varying degrees) with Windows 7, 8.1, 10.
+CSEW is a scoring engine written in bash for scoring Windows CyberPatriot images. It is configured by adding scoring options into the `save_data.db` and moving everything to where it needs to be and setting up the scoring engine for auto running. It now includes a web page Score Report. It works (to varying degrees) with Windows 7, 8.1, 10.
 
 ## Features
 CSEW is still a baby and it's rough around the edges, but so far it can score the following events:
@@ -45,25 +45,26 @@ CSEW can be run with "silent misses" which simulates a CyberPatriot round where 
 
 ## How to install using git
 1. Set up your image and put your vulnerabilities in place.
-2. Clone into CSEW by typing: `git clone https://github.com/gmngmstr/CSEWv2.git`
-3. Run `CSEW\Run Files\configurator.exe` as administrator to set up the config file. 
+2. Clone into CSEW by typing: `git clone https://github.com/gmngmstr/CSEW.git`
+3. Run `CSEW\configurator.exe` as administrator to set up the config file. 
 4. Once finished click `Write to Config` at the bottom of the page
 5. After you are satisfied that it is working how you want, you can delete the CSEW directory.
 
 ## How to install without git
 1. To install the scoring engine extract the folder to the desktop of the windows image
-2. Run `CSEW\Run Files\configurator.exe` as administrator to set up the config file. 
+2. Run `CSEW\configurator.exe` as administrator to set up the config file. 
 3. To edit the configuration of the scoring engine type `sudo python configurator.py` in the terminal
 	This will launch the GUI for configuring the scoring settings
 4. Once finished click `Write to Config` at the bottom of the page
 5. After you are satisfied that it is working how you want, you can delete the CSEW directory.
 
 Notes:
-The settings are saved in the `save_data.json` file as long as you have this file you can load the configuration at any time into the configurator and make changes
+The settings are saved in the `save_data.db` file as long as you have this file you can load the configuration at any time into the configurator and make changes
 
-**Important Note**: Your students _will_ be able to see the vulnerabilities if you leave the CSEW folder behind or if they view the `save_data.json` file that is created in `C:/CyberPatriot/`. I tell my students where the file is and that they should stay away from it. It is practice, after all.
+**Important Note**: Your students _will_ be able to see the vulnerabilities if you leave the CSEW folder behind or if they view the `save_data.db` file that is created in `C:/CyberPatriot/`. I tell my students where the file is and that they should stay away from it. It is practice, after all.
 
 ## Known issues and planned updates
 - Write a sample explanation for a FTP server
-- Update all of the explanations
 - Make Readme generator and setting setter (Maybe)
+
+## Source Code [Here](https://bitbucket.org/coastlinecollege/csew/src/master/)
